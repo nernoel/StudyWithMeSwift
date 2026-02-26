@@ -3,16 +3,15 @@ import SwiftUI
 private var welcomeText = "Welcome to study with me!"
 private var buttonText = "Get started"
 
-
 struct WelcomeView: View {
-    @State private var goToLogin = false;
+    @State private var navigateToLoginView = false;
     
     var body: some View {
         NavigationStack(){
             VStack {
                 Text(welcomeText);
                 Button("Get started"){
-                    goToLogin = true;
+                    navigateToLoginView = true;
                 }
                 .padding()
             }
@@ -21,8 +20,7 @@ struct WelcomeView: View {
              Go to login page when goToLogin button is pressed
              Boolean turns to true to navigate to view
              */
-            .navigationDestination(isPresented: $goToLogin){
-                LoginView();
+            .navigationDestination(isPresented: $navigateToLoginView){
             }
         }
     }

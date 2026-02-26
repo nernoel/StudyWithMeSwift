@@ -1,17 +1,22 @@
-//
-//  StudyWithMeApp.swift
-//  StudyWithMe
-//
-//  Created by Noel Erulu on 2/23/26.
-//
-
 import SwiftUI
 
 @main
 struct StudyWithMeApp: App {
+    @StateObject private var authModel = AuthModel()
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            if authModel.isAuthenticated {
+                HomeView()
+                    .environmentObject(authModel)
+            } else {
+                LoginView()
+                    .environmentObject(authModel)
+            }
         }
     }
+}
+
+#Preview {
+    
 }
