@@ -1,100 +1,161 @@
-//
-//  CreateSessionView.swift
-//  StudyWithMe
-//
-//  Created by Noel Erulu on 2/25/26.
 import SwiftUI
 import Supabase
 
-/*
- Import supabase client
- */
-let supabase = SupabaseClient(
-    supabaseURL: URL(string: SupabaseConfig.SUPABASE_URL)!,
-    supabaseKey: SupabaseConfig.SUPABASE_KEY
-)
-
 nonisolated
-struct StudySession: Decodable, Encodable, Sendable {
+struct StudySession: Decodable, Encodable, Sendable, Identifiable {
+    let id: UUID?
     let title: String?
     let description: String?
     let isOpen: Bool?
     let sessionOwner: String?
-    
+    let studyDay: Date?
+    let locationDetails: String?
+    let startTime: Date?
+    let endTime: Date?
+    let subject: String?
+
     enum CodingKeys: String, CodingKey {
-        case title = "title"
-        case description = "description"
+        case id, title, description
         case isOpen = "is_open"
         case sessionOwner = "session_owner"
+        case studyDay = "study_day"
+        case locationDetails = "location_details"
+        case startTime = "start_time"
+        case endTime = "end_time"
+        case subject
     }
 }
 
 struct CreateSessionView: View {
-    @State private var title: String = ""
-    @State private var description: String = ""
-    @State private var isOpen: Bool = true
-    
+
+    @State private var title = ""
+    @State private var description = ""
+    @State private var subject = ""
+    @State private var locationDetails = ""
+    @State private var isOpen = true
+    @State private var studyDay = Date()
+    @State private var startTime = Date()
+    @State private var endTime = Date()
+    @State private var showInviteFriends = false
+    @State private var invitedFriends: Set<UUID> = []
+
+    @StateObject private var friendsViewModel = FriendsViewModel()
     @Environment(\.dismiss) var dismiss
-    
-    // Get the current auth user id for session owner
-    func fetchCurrentUserId() async -> String? {
+
+    private var supabase: SupabaseClient {
+        SupabaseClient(
+            supabaseURL: URL(string: SupabaseConfig.SUPABASE_URL)!,
+            supabaseKey: SupabaseConfig.SUPABASE_KEY
+        )
+    }
+
+    // MARK: - Create Session
+    func createStudySession() async {
         do {
             let userId = try await supabase.auth.session.user.id
-            return userId.uuidString
-        } catch {
-            print("Error fetching current user")
-            return nil
-        }
-    }
-    func createStudySession() async {
-        let newSession = await StudySession(
-            title: title,
-            description: description,
-            isOpen: isOpen,
-            sessionOwner: fetchCurrentUserId()
-        )
-        do {
+            let sessionId = UUID()
+
+            // Ensure the creator is always part of the session
+            invitedFriends.insert(userId)
+
+            let session = StudySession(
+                id: sessionId,
+                title: title,
+                description: description,
+                isOpen: isOpen,
+                sessionOwner: userId.uuidString,
+                studyDay: studyDay,
+                locationDetails: locationDetails,
+                startTime: startTime,
+                endTime: endTime,
+                subject: subject
+            )
+
+            // Insert session
             try await supabase.database
                 .from("study_sessions")
-                .insert(newSession)
+                .insert(session)
                 .execute()
+
+            // Insert participants
+            let participantsPayload: [[String: String]] = invitedFriends.map {
+                ["session_id": sessionId.uuidString, "user_id": $0.uuidString]
+            }
+
+            try await supabase.database
+                .from("study_session_participants")
+                .insert(participantsPayload)
+                .execute()
+
+            dismiss()
         } catch {
-            print("Error:", error.localizedDescription)
+            print("Create session error:", error.localizedDescription)
         }
     }
-    
+
     var body: some View {
-        HStack {
-            Text("Create a new study session")
-                .bold(true)
-                .fontWidth(.expanded)
-        }
-        Spacer()
         NavigationStack {
-            VStack {
-                Form {
-                    Section(header: Text("Title")) {
-                        TextField("Session title" ,text: $title)
-                    }
-                    Section(header: Text("Description")) {
-                        TextField("Enter a description", text: $description)
-                    }
-                    Section(header: Text("Session visibility")) {
-                        Toggle("Private", isOn: $isOpen)
-                    }
-                    // Add section to choose category / classes here later...
+            Form {
+                Section("Title") { TextField("Session title", text: $title) }
+                Section("Description") { TextEditor(text: $description).frame(height: 80) }
+                Section("Course") { TextField("Course", text: $subject) }
+                Section("Location") { TextEditor(text: $locationDetails).frame(height: 60) }
+                Section("Visibility") { Toggle("Public", isOn: $isOpen) }
+                Section("Date & Time") {
+                    DatePicker("Day", selection: $studyDay, displayedComponents: .date)
+                    DatePicker("Start", selection: $startTime, displayedComponents: .hourAndMinute)
+                    DatePicker("End", selection: $endTime, displayedComponents: .hourAndMinute)
                 }
-                Button("Create new session") {
-                    Task {
-                        await createStudySession()
-                        dismiss()
-                        // Create an alert after session is created
+
+                // MARK: - Invite Friends
+                Section {
+                    Button {
+                        showInviteFriends = true
+                    } label: {
+                        HStack {
+                            Text("Invite Friends")
+                            Spacer()
+                            if invitedFriends.isEmpty {
+                                Text("Select friends")
+                                    .foregroundColor(.gray)
+                                    .italic()
+                            } else {
+                                Text("\(invitedFriends.count) selected")
+                                    .foregroundColor(.blue)
+                                    .bold()
+                            }
+                        }
                     }
                 }
-               
+
+                Section {
+                    Button("Create Session") {
+                        Task { await createStudySession() }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+            .navigationTitle("Create Session")
+            .sheet(isPresented: $showInviteFriends) {
+                InviteFriendsView(viewModel: friendsViewModel, invitedFriends: $invitedFriends)
+                    .onAppear {
+                        Task {
+                            await friendsViewModel.fetchAllUsers()
+                            await friendsViewModel.fetchFriends()
+                        }
+                    }
+            }
+            .task {
+                await friendsViewModel.fetchAllUsers()
+                await friendsViewModel.fetchFriends()
             }
         }
     }
+}
+
+#Preview {
+    CreateSessionView()
 }
 
 #Preview {

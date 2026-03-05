@@ -7,4 +7,4 @@ class SupabaseConfig {
     static let SUPABASE_KEY =
         ""
 }
-    
+   
