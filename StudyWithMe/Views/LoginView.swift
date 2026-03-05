@@ -1,58 +1,76 @@
+//
+//  LoginView.swift
+//  StudyWithMe
+//
+//  Created by Noel Erulu on 2/24/26.
+//
 import SwiftUI
 
+import Auth
+import Supabase
+
 struct LoginView: View {
-    // Hardcoded values for now
+    @EnvironmentObject var authModel : AuthModel
+    
     @State private var email: String = ""
     @State private var password: String = ""
+    @State private var errorMessage: String? = nil
+    @State private var isLoading: Bool = false
     
-    @State private var loggedIn: Bool = false;
     
-    func validateLoginInformation() -> Bool {
-        if email == "johndoe@gmail.com" && password == "apples123" {
-            print("Login successful")
-            return true;
-        } else {
-            print("Login failed")
-            return false;
-        }
-    }
-    
+    private let supabase = SupabaseClient(
+        supabaseURL: URL(string: SupabaseConfig.SUPABASE_URL)!,
+        supabaseKey: SupabaseConfig.SUPABASE_KEY
+    )
+        
     var body: some View {
-        NavigationStack {
-            VStack(){
-                Text("Login")
-                
-                TextField("Email", text: $email)
-                    .textFieldStyle(.roundedBorder)
-                    .textInputAutocapitalization(.never)
-                
-                
-                SecureField("Password", text: $password)
-                    .textFieldStyle(.roundedBorder)
-                    .textInputAutocapitalization(.never)
-                
-                Button("Sign in") {
-                    if validateLoginInformation() == true {
-                        loggedIn = true
-                        print("isLoggedin: " + String(loggedIn))
+        NavigationStack() {
+            Text("Login")
+            ZStack {
+                if isLoading {
+                    ProgressView {
+                        Text("Logging in")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    
-                    
                 }
-                .navigationDestination(isPresented: $loggedIn){
-                    HomeView();
+                VStack {
+                    TextField(
+                        "Email address", text: $email
+                    )
+                    .textInputAutocapitalization(.never)
+                    SecureField(
+                        "Password", text: $password
+                    )
+                    .textInputAutocapitalization(.never)
+                    Button("Click to login", action: {
+                        Task {
+                            do {
+                                try await authModel.signIn(email: email, password: password)
+                                print("Button clicked")
+                                isLoading = true
+                            } catch {
+                                print("Login failed", error.localizedDescription)
+                            }
+                        }
+                    })
+                    NavigationLink(destination:
+                                    HomeView()
+                        .environmentObject(authModel)) {
+                            
+                        }
                 }
                 
             }
         }
-        // Hide the back button
+        
         .navigationBarBackButtonHidden(true)
-        
-        
     }
-    
 }
+        
 
 #Preview {
     LoginView()
+        .environmentObject(AuthModel())
 }
+
