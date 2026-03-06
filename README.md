@@ -192,9 +192,3 @@ This project was built to practice:
 - Building scalable mobile applications
 
 ---
-
-# 👨‍💻 Author
-
-Built by a **Computer Science student passionate about software engineering, mobile development, and building real-world applications.**
-
-If you found this project interesting, feel free to ⭐ the repository!
